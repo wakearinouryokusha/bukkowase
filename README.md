@@ -1,32 +1,26 @@
-# Hourly Site Visitor - Playwright版
+Site Visitor - Playwright版(30分ごと)
 
-登録したWebサイトを、GitHub Actions上の実際のChromiumブラウザ（Playwright）で毎時間1回開く構成です。
+登録したWebサイトを、GitHub Actions上の実際のChromiumブラウザ(Playwright)で 30分ごとに1回 開く構成です。 JavaScriptも実行され、ページ読み込み後に5秒間滞在します。
 
-## 何が違う？
+使い方
+このリポジトリの Actions タブを開きます。
+Set target URL → Run workflow を開き、url に対象サイトを入力して実行します。 URLが config/url.txt に保存され、すぐに1回アクセスします。
+その後、Website visit every 30 min (Playwright) が毎時17分と47分に自動実行されます。
+すぐ試すなら、Website visit every 30 min (Playwright) → Run workflow で手動実行できます。
 
-前のHTTP GET版と違って、JavaScriptを実行し、ページを実際のブラウザとして読み込みます。
-SPAやJavaScriptで描画されるページにも対応しやすく、ページ読み込み後に5秒間滞在します。
+URLを変更するときも Set target URL を再実行してください。
 
-ただし、ログイン状態やCookieは毎回の実行で新規ブラウザになるため、永続保存はしていません。またCAPTCHAやアクセス制限を突破する用途には対応していません。
+確認方法
 
-## 使い方
+Actions タブで実行を開き、Visit site のログに 日時 URL -> HTTPステータス "ページタイトル" が出ていれば成功です。 HTTPステータスが400以上、または読み込みに失敗した場合は、その実行が失敗(赤)になります。
 
-1. このフォルダをGitHubの新しい **Public repository** にアップロードします。
-2. リポジトリの `Actions` タブを開きます。
-3. `Set target URL` → `Run workflow` を開き、`url` に対象サイトを入力して実行します。
-4. その後、`Hourly website visit (Playwright)` が毎時17分（Asia/Tokyo）に自動実行されます。
-5. すぐ試すなら `Hourly website visit (Playwright)` → `Run workflow` で手動実行できます。
+無料について
 
-URLを変更するときも `Set target URL` を再実行してください。
+Publicリポジトリで標準のGitHub-hostedランナーを使う場合は、無料で使えます。 Privateリポジトリは月間の無料枠を消費します(30分ごと=月約1,440回。1回あたり1〜2分かかります)。最新の料金は公式ページで確認してください。
 
-## 無料について
-
-GitHubのPublic repositoryで標準GitHub-hosted runnerを使う場合、標準ランナーは無料・無制限です。したがって、このPlaywright版もPublic repositoryなら追加料金なしで運用できます。
-
-Private repositoryは別途GitHub Freeの月間無料枠があるため、「確実に無料で使い続ける」前提ならPublic repositoryを推奨します。
-
-## 注意
-
-`config/url.txt` に登録したURLはリポジトリのファイルなので、Public repositoryでは他人にも見えます。URL自体に秘密情報（APIキー等）を含めないでください。
-
+注意
+GitHubのcronは混雑時に遅れることがあり、厳密な30分間隔にはなりません。
+Publicリポジトリでは、60日間リポジトリの動きがないとスケジュール実行が自動停止します。止まったらActionsタブから再開するか、Set target URL を実行してください。
+config/url.txt のURLはPublicリポジトリでは他人にも見えます。APIキーなどの秘密情報をURLに含めないでください。
+ログイン状態やCookieは毎回リセットされます。CAPTCHAやアクセス制限の突破には対応していません。
 対象サイトの利用規約・アクセス制限・robots.txt等に従って利用してください。
