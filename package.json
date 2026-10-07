@@ -1,0 +1,13 @@
+{
+  "name": "hourly-site-visitor-playwright",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Visit a configured website hourly using Playwright on GitHub Actions.",
+  "license": "MIT",
+  "engines": {
+    "node": ">=20"
+  },
+  "dependencies": {
+    "playwright": "1.63.0"
+  }
+}
