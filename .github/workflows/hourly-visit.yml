@@ -1,41 +1,16 @@
-name: Hourly website visit (Playwright)
+name: Schedule Test
 
 on:
   schedule:
     - cron: '*/5 * * * *'
-      timezone: 'Asia/Tokyo'
   workflow_dispatch:
 
-permissions:
-  contents: read
-
-concurrency:
-  group: hourly-site-visit
-  cancel-in-progress: false
-
 jobs:
-  visit:
+  test:
     runs-on: ubuntu-latest
-    timeout-minutes: 10
 
     steps:
-      - name: Checkout
-        uses: actions/checkout@v6
-
-      - name: Setup Node.js
-        uses: actions/setup-node@v6
-        with:
-          node-version: lts/*
-
-      - name: Install Node dependencies
-        run: npm install --no-audit --no-fund
-
-      - name: Install Playwright Chromium
-        run: npx playwright install --with-deps chromium
-
-      - name: Visit target website in real Chromium
-        env:
-          TARGET_FILE: config/url.txt
-          PAGE_TIMEOUT_MS: 30000
-          WAIT_AFTER_LOAD_MS: 5000
-        run: node visit.js
+      - name: Test
+        run: |
+          echo "Scheduled run started"
+          date
