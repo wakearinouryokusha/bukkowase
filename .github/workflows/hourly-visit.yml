@@ -2,8 +2,7 @@ name: Hourly website visit (Playwright)
 
 on:
   schedule:
-    # 毎時17分。毎時ちょうど付近の混雑を避ける。
-    - cron: '*/30 * * * *'
+    - cron: '*/5 * * * *'
       timezone: 'Asia/Tokyo'
   workflow_dispatch:
 
