@@ -1,12 +1,32 @@
-name: Schedule Test
+name: Website Visit
 
 on:
   schedule:
-    - cron: '16 4 * * *'
+    - cron: '0,10 * * * *'
   workflow_dispatch:
 
 jobs:
-  test:
+  visit:
     runs-on: ubuntu-latest
+
     steps:
-      - run: date -u
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Node.js setup
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Install dependencies
+        run: npm install --no-audit --no-fund
+
+      - name: Install Playwright Chromium
+        run: npx playwright install --with-deps chromium
+
+      - name: Visit website
+        env:
+          TARGET_FILE: config/url.txt
+          PAGE_TIMEOUT_MS: 30000
+          WAIT_AFTER_LOAD_MS: 5000
+        run: node visit.js
