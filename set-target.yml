@@ -1,0 +1,50 @@
+name: Set target URL
+
+on:
+  workflow_dispatch:
+    inputs:
+      url:
+        description: '訪問するURL（http:// または https://）'
+        required: true
+        type: string
+
+permissions:
+  contents: write
+
+jobs:
+  set-target:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+
+      - name: Validate and save URL
+        env:
+          TARGET_URL: ${{ inputs.url }}
+        run: |
+          node - <<'NODE'
+          const fs = require('node:fs');
+          const raw = process.env.TARGET_URL.trim();
+          let parsed;
+          try {
+            parsed = new URL(raw);
+          } catch {
+            throw new Error('URLの形式が不正です。');
+          }
+
+          if (!['http:', 'https:'].includes(parsed.protocol) || !parsed.hostname) {
+            throw new Error('URLは http:// または https:// の完全なURLにしてください。');
+          }
+
+          fs.writeFileSync('config/url.txt', parsed.toString() + '\n', 'utf8');
+          console.log(`登録しました: ${parsed.toString()}`);
+          NODE
+
+      - name: Commit target URL
+        run: |
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add config/url.txt
+          git diff --cached --quiet && echo '変更なし' && exit 0
+          git commit -m 'Update target URL'
+          git push
