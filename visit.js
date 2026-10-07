@@ -1,87 +1,49 @@
-const fs = require('node:fs');
+'use strict';
+const fs = require('fs');
+const path = require('path');
 const { chromium } = require('playwright');
 
-const TARGET_FILE = process.env.TARGET_FILE || 'config/url.txt';
-const TIMEOUT_MS = Number(process.env.PAGE_TIMEOUT_MS || 30000);
-const WAIT_AFTER_LOAD_MS = Number(process.env.WAIT_AFTER_LOAD_MS || 5000);
+const STAY_MS = 5000;      // ページ読み込み後の滞在時間
+const TIMEOUT_MS = 30000;  // ページ読み込みのタイムアウト
 
 function readTargetUrl() {
-  const text = fs.readFileSync(TARGET_FILE, 'utf8');
-  const url = text
-    .split(/\r?\n/)
-    .map(line => line.trim())
-    .find(line => line && !line.startsWith('#'));
-
-  if (!url) {
-    throw new Error('訪問先URLが未設定です。Actions > Set target URL で登録してください。');
-  }
-
-  let parsed;
-  try {
-    parsed = new URL(url);
-  } catch {
-    throw new Error(`URLの形式が不正です: ${url}`);
-  }
-
-  if (!['http:', 'https:'].includes(parsed.protocol) || !parsed.hostname) {
-    throw new Error(`URLは http:// または https:// の完全なURLにしてください: ${url}`);
-  }
-
-  return parsed.toString();
+  if (process.env.TARGET_URL) return process.env.TARGET_URL.trim();
+  const file = path.join(__dirname, 'config', 'url.txt');
+  if (!fs.existsSync(file)) return '';
+  const line = fs.readFileSync(file, 'utf8')
+    .replace(/\r/g, '')
+    .split('\n')
+    .map((l) => l.trim())
+    .find((l) => l && !l.startsWith('#'));
+  return line || '';
 }
 
 (async () => {
-  const targetUrl = readTargetUrl();
-  console.log(`対象URL: ${targetUrl}`);
-  console.log('Playwright Chromiumを起動します。');
-
-  const browser = await chromium.launch({
-    headless: true,
-  });
-
-  try {
-    const context = await browser.newContext({
-      viewport: { width: 1280, height: 720 },
-      locale: 'ja-JP',
-      timezoneId: 'Asia/Tokyo',
-      userAgent:
-        'Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/153.0.0.0 Safari/537.36',
-    });
-
-    const page = await context.newPage();
-
-    page.on('console', msg => {
-      if (msg.type() === 'error') {
-        console.log(`[page console error] ${msg.text()}`);
-      }
-    });
-
-    page.on('pageerror', error => {
-      console.log(`[page error] ${error.message}`);
-    });
-
-    const response = await page.goto(targetUrl, {
-      waitUntil: 'domcontentloaded',
-      timeout: TIMEOUT_MS,
-    });
-
-    // SPAやJavaScript中心のサイトでも「ブラウザで開いた」状態に少し滞在する。
-    await page.waitForTimeout(WAIT_AFTER_LOAD_MS);
-
-    const title = await page.title().catch(() => '');
-    const finalUrl = page.url();
-    const status = response ? response.status() : 'no-response';
-    const contentType = response ? (response.headers()['content-type'] || '') : '';
-
-    console.log(`訪問完了: HTTP ${status}`);
-    console.log(`最終URL: ${finalUrl}`);
-    console.log(`タイトル: ${title}`);
-    console.log(`Content-Type: ${contentType}`);
-    console.log(`滞在時間: ${WAIT_AFTER_LOAD_MS} ms`);
-  } finally {
-    await browser.close();
+  const url = readTargetUrl();
+  if (!url) {
+    console.log('config/url.txt にURLがありません。Actionsの「Set target URL」でURLを設定してください。');
+    return;
   }
-})().catch(error => {
-  console.error(`訪問失敗: ${error.stack || error}`);
-  process.exit(1);
-});
+  if (!/^https?:\/\//i.test(url)) {
+    console.error(`http/https以外のURLは開けません: ${url}`);
+    process.exitCode = 1;
+    return;
+  }
+
+  let browser;
+  try {
+    browser = await chromium.launch({ headless: true });
+    const context = await browser.newContext({ locale: 'ja-JP', timezoneId: 'Asia/Tokyo' });
+    const page = await context.newPage();
+    const res = await page.goto(url, { waitUntil: 'load', timeout: TIMEOUT_MS });
+    await page.waitForTimeout(STAY_MS);
+    const status = res ? res.status() : 'n/a';
+    console.log(`${new Date().toISOString()} ${url} -> ${status} "${await page.title()}"`);
+    if (res && res.status() >= 400) process.exitCode = 1;
+  } catch (e) {
+    console.error(`失敗: ${url}: ${e.message}`);
+    process.exitCode = 1;
+  } finally {
+    if (browser) await browser.close();
+  }
+})();
