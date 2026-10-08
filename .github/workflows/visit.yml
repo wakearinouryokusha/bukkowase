@@ -1,17 +1,17 @@
 name: Website visit every 30 min (Playwright)
- 
+
 on:
   schedule:
     - cron: '17,47 * * * *'   # 30分ごと(毎時17分と47分。日本時間でも同じ分)
   workflow_dispatch:           # 手動実行もできます
- 
+
 permissions:
   contents: read
- 
+
 concurrency:
   group: website-visit
   cancel-in-progress: false
- 
+
 jobs:
   visit:
     runs-on: ubuntu-latest
@@ -19,17 +19,17 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v6
- 
+
       - name: Setup Node.js
         uses: actions/setup-node@v6
         with:
           node-version: '22'
- 
+
       - name: Install dependencies
         run: npm install --no-audit --no-fund
- 
+
       - name: Install Chromium
         run: npx playwright install --with-deps chromium
- 
+
       - name: Visit site
         run: node visit.js
