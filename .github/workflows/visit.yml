@@ -1,8 +1,6 @@
 name: Website visit every 30 min (Playwright)
 
-on:
-  schedule:
-    - cron: '17,47 * * * *'   # 30分ごと(毎時17分と47分。日本時間でも同じ分)
+on:   
   workflow_dispatch:           # 手動実行もできます
 
 permissions:
