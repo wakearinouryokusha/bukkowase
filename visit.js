@@ -6,16 +6,28 @@ const { chromium } = require('playwright');
 const STAY_MS = 5000;      // ページ読み込み後の滞在時間
 const TIMEOUT_MS = 30000;  // ページ読み込みのタイムアウト
 
-function readTargetUrl() {
-  if (process.env.TARGET_URL) return process.env.TARGET_URL.trim();
+function readTargetUrls() {
+  if (process.env.TARGET_URLS) {
+    return process.env.TARGET_URLS
+      .replace(/\r/g, '')
+      .split('\n')
+      .map((url) => url.trim())
+      .filter((url) => url && !url.startsWith('#'));
+  }
+
+  if (process.env.TARGET_URL) {
+    return [process.env.TARGET_URL.trim()];
+  }
+
   const file = path.join(__dirname, 'config', 'url.txt');
-  if (!fs.existsSync(file)) return '';
-  const line = fs.readFileSync(file, 'utf8')
+
+  if (!fs.existsSync(file)) return [];
+
+  return fs.readFileSync(file, 'utf8')
     .replace(/\r/g, '')
     .split('\n')
-    .map((l) => l.trim())
-    .find((l) => l && !l.startsWith('#'));
-  return line || '';
+    .map((url) => url.trim())
+    .filter((url) => url && !url.startsWith('#'));
 }
 
 (async () => {
