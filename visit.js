@@ -2,8 +2,30 @@
 
 const fs = require('fs');
 const path = require('path');
+const { chromium } = require('playwright');
 
-const TIMEOUT_MS = 10000;
+const TIMEOUT_MS = 30000;
+const RENDER_WAIT_MS = 1000;
+
+// 一般的なアクセス解析・広告計測サービス
+const TRACKING_HOSTS = [
+  'google-analytics.com',
+  'googletagmanager.com',
+  'doubleclick.net',
+  'googleadservices.com',
+  'connect.facebook.net',
+  'clarity.ms',
+  'hotjar.com',
+  'segment.io',
+  'segment.com',
+  'mixpanel.com',
+  'amplitude.com',
+  'plausible.io',
+  'umami.is',
+  'posthog.com',
+  'heapanalytics.com',
+  'fullstory.com'
+];
 
 // URL一覧を読み込む
 function readTargetUrls() {
@@ -32,11 +54,34 @@ function readTargetUrls() {
     .filter((url) => url && !url.startsWith('#'));
 }
 
-// URLが正しい形式か確認する
+// URL形式を確認する
 function isValidUrl(value) {
   try {
     const parsed = new URL(value);
-    return parsed.protocol === 'http:' || parsed.protocol === 'https:';
+    return parsed.protocol === 'http:' ||
+      parsed.protocol === 'https:';
+  } catch {
+    return false;
+  }
+}
+
+// 解析・広告計測リクエストか確認する
+function isTrackingRequest(value) {
+  try {
+    const parsed = new URL(value);
+    const hostname = parsed.hostname.toLowerCase();
+
+    const blockedHost = TRACKING_HOSTS.some(
+      (domain) =>
+        hostname === domain ||
+        hostname.endsWith(`.${domain}`)
+    );
+
+    const facebookPixel =
+      hostname === 'facebook.com' &&
+      /^\/tr(?:\/|$)/.test(parsed.pathname);
+
+    return blockedHost || facebookPixel;
   } catch {
     return false;
   }
@@ -45,15 +90,19 @@ function isValidUrl(value) {
 (async () => {
   const urls = readTargetUrls();
 
-  // URLが登録されていない場合
+  // URL未登録
   if (urls.length === 0) {
-    console.error('config/url.txt にURLが登録されていません。');
+    console.error(
+      'config/url.txt にURLが登録されていません。'
+    );
     process.exitCode = 1;
     return;
   }
 
-  // URLの形式を確認
-  const invalidUrl = urls.find((url) => !isValidUrl(url));
+  // URL形式の確認
+  const invalidUrl = urls.find(
+    (url) => !isValidUrl(url)
+  );
 
   if (invalidUrl) {
     console.error(`不正なURLです: ${invalidUrl}`);
@@ -61,60 +110,129 @@ function isValidUrl(value) {
     return;
   }
 
-  // GitHub Actionsの実行番号を取得
-  const parsedRunNumber = Number.parseInt(
-    process.env.GITHUB_RUN_NUMBER || '1',
-    10
+  // GitHub Actionsの実行番号
+  const parsedRunNumber = Number(
+    process.env.GITHUB_RUN_NUMBER || '1'
   );
 
-  const runNumber = Number.isFinite(parsedRunNumber)
-    ? Math.max(1, parsedRunNumber)
-    : 1;
+  const runNumber =
+    Number.isSafeInteger(parsedRunNumber) &&
+    parsedRunNumber > 0
+      ? parsedRunNumber
+      : 1;
 
-  // 実行番号に応じて確認対象を選ぶ
+  // 確認対象を選択
   const targetIndex = (runNumber - 1) % urls.length;
   const url = urls[targetIndex];
 
   console.log(
-    `実行番号: ${runNumber} / 確認対象: ${targetIndex + 1}/${urls.length}`
+    `実行番号: ${runNumber} / ` +
+    `確認対象: ${targetIndex + 1}/${urls.length}`
   );
 
-  // サイトのHTTP応答を確認
-  const controller = new AbortController();
-  const timeout = setTimeout(
-    () => controller.abort(),
-    TIMEOUT_MS
-  );
+  let browser;
 
   try {
-    const response = await fetch(url, {
-      method: 'GET',
-      redirect: 'follow',
-      signal: controller.signal
+    // ブラウザ起動
+    browser = await chromium.launch({
+      headless: true
     });
 
-    const status = response.status;
+    // 監視専用のブラウザ環境
+    const context = await browser.newContext({
+      userAgent: 'SyntheticMonitor/1.0',
+      locale: 'ja-JP',
+      timezoneId: 'Asia/Tokyo'
+    });
 
-    console.log(
-      `${new Date().toISOString()} ${url} -> HTTP ${status}`
-    );
+    const page = await context.newPage();
 
-    await response.body?.cancel();
+    // 解析・広告計測サービスへの通信を遮断
+    await page.route('**/*', async (route) => {
+      const requestUrl = route.request().url();
 
-    if (!response.ok) {
-      console.error(`サイトの応答が正常ではありません: HTTP ${status}`);
+      if (isTrackingRequest(requestUrl)) {
+        console.log(
+          `計測リクエストを遮断: ${requestUrl}`
+        );
+        await route.abort('blockedbyclient');
+        return;
+      }
+
+      await route.continue();
+    });
+
+    // JavaScript実行時エラーを記録
+    const pageErrors = [];
+
+    page.on('pageerror', (error) => {
+      pageErrors.push(error.message);
+    });
+
+    // ページ読み込み
+    const response = await page.goto(url, {
+      waitUntil: 'load',
+      timeout: TIMEOUT_MS
+    });
+
+    if (!response) {
+      throw new Error(
+        'HTTPレスポンスを取得できませんでした。'
+      );
+    }
+
+    // ページ表示を少し待つ
+    await page.waitForTimeout(RENDER_WAIT_MS);
+
+    // ページ状態を確認
+    const pageInfo = await page.evaluate(() => ({
+      title: document.title,
+      readyState: document.readyState,
+      hasBody: Boolean(document.body)
+    }));
+
+    const status = response.status();
+
+    console.log('------------------------------');
+    console.log(`確認日時: ${new Date().toISOString()}`);
+    console.log(`URL: ${url}`);
+    console.log(`HTTPステータス: ${status}`);
+    console.log(`ページタイトル: ${pageInfo.title}`);
+    console.log(`読み込み状態: ${pageInfo.readyState}`);
+    console.log(`本文要素: ${pageInfo.hasBody}`);
+    console.log('------------------------------');
+
+    // HTTPエラーを確認
+    if (status >= 400) {
+      console.error(`HTTPエラー: ${status}`);
       process.exitCode = 1;
     }
-  } catch (error) {
-    if (error.name === 'AbortError') {
-      console.error(`タイムアウトしました: ${url}`);
-    } else {
-      console.error(`確認に失敗しました: ${url}: ${error.message}`);
+
+    // ページ表示を確認
+    if (!pageInfo.hasBody) {
+      console.error('ページ本文が見つかりません。');
+      process.exitCode = 1;
     }
 
+    // JavaScriptエラーを確認
+    if (pageErrors.length > 0) {
+      console.error('JavaScript実行エラー:');
+
+      for (const error of pageErrors) {
+        console.error(`- ${error}`);
+      }
+
+      process.exitCode = 1;
+    }
+
+  } catch (error) {
+    console.error(`確認に失敗しました: ${error.message}`);
     process.exitCode = 1;
+
   } finally {
-    clearTimeout(timeout);
+    if (browser) {
+      await browser.close();
+    }
   }
 })().catch((error) => {
   console.error(`予期しないエラー: ${error.message}`);
