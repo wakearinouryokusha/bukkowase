@@ -31,31 +31,33 @@ function readTargetUrls() {
 }
 
 (async () => {
-  const url = readTargetUrl();
-  if (!url) {
-    console.log('config/url.txt にURLがありません。Actionsの「Set target URL」でURLを設定してください。');
-    return;
-  }
-  if (!/^https?:\/\//i.test(url)) {
-    console.error(`http/https以外のURLは開けません: ${url}`);
-    process.exitCode = 1;
-    return;
-  }
+const urls = readTargetUrls();
 
-  let browser;
-  try {
-    browser = await chromium.launch({ headless: true });
-    const context = await browser.newContext({ locale: 'ja-JP', timezoneId: 'Asia/Tokyo' });
-    const page = await context.newPage();
-    const res = await page.goto(url, { waitUntil: 'load', timeout: TIMEOUT_MS });
-    await page.waitForTimeout(STAY_MS);
-    const status = res ? res.status() : 'n/a';
-    console.log(`${new Date().toISOString()} ${url} -> ${status} "${await page.title()}"`);
-    if (res && res.status() >= 400) process.exitCode = 1;
-  } catch (e) {
-    console.error(`失敗: ${url}: ${e.message}`);
-    process.exitCode = 1;
-  } finally {
-    if (browser) await browser.close();
-  }
-})();
+if (urls.length === 0) {
+  console.error('config/url.txt にURLが登録されていません。');
+  process.exitCode = 1;
+  return;
+}
+
+const invalidUrl = urls.find(
+  (url) => !/^https?:\/\//i.test(url)
+);
+
+if (invalidUrl) {
+  console.error(`不正なURLです: ${invalidUrl}`);
+  process.exitCode = 1;
+  return;
+}
+
+// GitHub Actionsの実行番号から訪問先を決定
+const runNumber = Math.max(
+  1,
+  Number.parseInt(process.env.GITHUB_RUN_NUMBER || '1', 10) || 1
+);
+
+const targetIndex = (runNumber - 1) % urls.length;
+const url = urls[targetIndex];
+
+console.log(
+  `実行番号: ${runNumber} / 訪問先: ${targetIndex + 1}/${urls.length}`
+);
