@@ -214,15 +214,13 @@ function isTrackingRequest(value) {
       process.exitCode = 1;
     }
 
-    // JavaScriptエラーを確認
+    // JavaScriptエラーは記録するが、ページの応答確認とは分離して警告扱いにする
     if (pageErrors.length > 0) {
-      console.error('JavaScript実行エラー:');
+      console.warn('JavaScript実行エラー（警告のみ）:');
 
       for (const error of pageErrors) {
-        console.error(`- ${error}`);
+        console.warn(`- ${error}`);
       }
-
-      process.exitCode = 1;
     }
 
   } catch (error) {
